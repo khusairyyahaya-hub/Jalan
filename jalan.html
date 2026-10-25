@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Jalan - crowd-reported navigation</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<style>
+:root{--bg:#10202b;--panel:#fff8e7;--ink:#10202b;--accent:#ff5a36;--ok:#1b8a5a;--line:#d9cfb4}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0;font-family:"Trebuchet MS",Verdana,sans-serif;color:var(--ink)}
+#map{position:absolute;inset:0}
+.top{position:absolute;z-index:1000;top:10px;left:10px;right:10px;max-width:460px;background:var(--panel);border-radius:14px;padding:10px;box-shadow:0 4px 16px rgba(0,0,0,.35)}
+.top input{width:100%;padding:11px 12px;border:2px solid var(--line);border-radius:10px;font-size:16px;background:#fff}
+.top input:focus{outline:3px solid var(--accent);border-color:var(--accent)}
+.row{display:flex;gap:8px;margin-top:8px}
+button{font:inherit;font-weight:700;border:0;border-radius:10px;padding:10px 12px;cursor:pointer;background:var(--bg);color:#fff}
+button.go{background:var(--accent);flex:1}
+button:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+#res{margin:6px 0 0;padding:0;list-style:none;max-height:140px;overflow:auto}
+#res li{padding:8px;border-radius:8px;cursor:pointer;font-size:14px}
+#res li:hover{background:#f1e6c6}
+#info{margin-top:8px;font-size:14px;line-height:1.4}
+#steps{max-height:150px;overflow:auto;margin:6px 0 0;padding-left:18px;font-size:13px}
+.report{position:absolute;z-index:1000;bottom:calc(14px + env(safe-area-inset-bottom,0px));left:10px;right:10px;display:flex;gap:8px;justify-content:center;flex-wrap:wrap}
+.report button{background:var(--panel);color:var(--ink);box-shadow:0 3px 10px rgba(0,0,0,.35)}
+.report button.on{background:var(--accent);color:#fff}
+.pin{font-size:24px;line-height:1;filter:drop-shadow(0 2px 2px rgba(0,0,0,.5))}
+#toast{position:absolute;z-index:1001;left:50%;bottom:80px;transform:translateX(-50%);background:var(--bg);color:#fff;padding:8px 14px;border-radius:20px;font-size:14px;display:none}
+@media (prefers-reduced-motion:no-preference){#toast{transition:opacity .2s}}
+</style>
+</head>
+<body>
+<div id="map"></div>
+<div class="top">
+  <input id="q" placeholder="Where to? (e.g. KLCC, Penang airport)" aria-label="Destination" autocomplete="off">
+  <ul id="res"></ul>
+  <div class="row"><button class="go" id="go">Get route</button><button id="loc">My location</button></div>
+  <div id="info">Search a destination, or tap the map to set one.</div>
+  <ol id="steps"></ol>
+</div>
+<div class="report" id="rep">
+  <button data-t="police">&#128110; Police</button>
+  <button data-t="crash">&#128165; Crash</button>
+  <button data-t="hazard">&#9888;&#65039; Hazard</button>
+  <button data-t="jam">&#128678; Jam</button>
+</div>
+<div id="toast"></div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script>
+const ICON={police:"\u{1F46E}",crash:"\u{1F4A5}",hazard:"\u26A0\uFE0F",jam:"\u{1F6A6}"};
+const TTL=2*60*60*1000; // reports expire after 2 hours
+const map=L.map("map",{zoomControl:false}).setView([3.139,101.687],12);
+L.control.zoom({position:"bottomright"}).addTo(map);
+L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:19,attribution:"&copy; OpenStreetMap"}).addTo(map);
+
+let me=null,meMarker=null,dest=null,destMarker=null,routeLine=null,pendingType=null,lastRoute=null;
+const markers={};
+
+// ---- reports (stored in this browser; swap for a backend to share between users)
+function load(){try{return JSON.parse(localStorage.getItem("jalan.reports")||"[]").filter(r=>Date.now()-r.t<TTL)}catch(e){return[]}}
+function save(a){try{localStorage.setItem("jalan.reports",JSON.stringify(a))}catch(e){}}
+let reports=load();
+function draw(){
+  Object.values(markers).forEach(m=>map.removeLayer(m));
+  reports.forEach(r=>{
+    const m=L.marker([r.lat,r.lng],{icon:L.divIcon({className:"",html:`<div class="pin">${ICON[r.type]}</div>`,iconSize:[24,24],iconAnchor:[12,12]})}).addTo(map);
+    m.bindPopup(`${r.type} reported ${Math.round((Date.now()-r.t)/60000)} min ago<br><button style="margin-top:6px;padding:4px 8px" onclick="gone('${r.id}')">It's gone</button>`);
+    markers[r.id]=m;
+  });
+}
+window.gone=id=>{reports=reports.filter(r=>r.id!==id);save(reports);draw();toast("Report removed")};
+function toast(t){const e=document.getElementById("toast");e.textContent=t;e.style.display="block";setTimeout(()=>e.style.display="none",2500)}
+
+document.getElementById("rep").addEventListener("click",e=>{
+  const b=e.target.closest("button");if(!b)return;
+  const t=b.dataset.t;
+  if(me){add(t,me.lat,me.lng);return}
+  pendingType=t;document.querySelectorAll(".report button").forEach(x=>x.classList.toggle("on",x===b));
+  toast("Tap the map where it is");
+});
+function add(type,lat,lng){
+  reports.push({id:String(Date.now()),type,lat,lng,t:Date.now()});save(reports);draw();toast("Reported - thanks");
+  if(dest&&lastRoute)reroute(true);
+}
+
+// ---- geocode + routing (Nominatim + OSRM public demo servers)
+async function search(){
+  const q=document.getElementById("q").value.trim();if(!q)return;
+  const ul=document.getElementById("res");ul.innerHTML="<li>Searching...</li>";
+  try{
+    const r=await fetch("https://nominatim.openstreetmap.org/search?format=json&limit=5&q="+encodeURIComponent(q));
+    const d=await r.json();
+    ul.innerHTML=d.length?"":"<li>No match. Try a more specific name.</li>";
+    d.forEach(p=>{const li=document.createElement("li");li.textContent=p.display_name;li.onclick=()=>{ul.innerHTML="";setDest(+p.lat,+p.lon)};ul.appendChild(li)});
+  }catch(e){ul.innerHTML="<li>Search failed. Check your internet connection.</li>"}
+}
+function setDest(lat,lng){
+  dest={lat,lng};if(destMarker)map.removeLayer(destMarker);
+  destMarker=L.marker([lat,lng],{icon:L.divIcon({className:"",html:'<div class="pin">\u{1F4CD}</div>',iconSize:[24,24],iconAnchor:[12,24]})}).addTo(map);map.setView([lat,lng],14);
+  if(me)reroute();else document.getElementById("info").textContent="Destination set. Tap My location, or tap the map to set your start.";
+}
+function setMe(lat,lng){
+  me={lat,lng};if(meMarker)map.removeLayer(meMarker);
+  meMarker=L.circleMarker([lat,lng],{radius:9,color:"#fff",weight:3,fillColor:"#1a73e8",fillOpacity:1}).addTo(map);
+}
+function locate(){
+  if(!navigator.geolocation){toast("Location not available");return}
+  navigator.geolocation.getCurrentPosition(p=>{setMe(p.coords.latitude,p.coords.longitude);map.setView([me.lat,me.lng],14);if(dest)reroute()},()=>toast("Location blocked. Tap the map to set a start."),{enableHighAccuracy:true});
+}
+// distance from point to segment in metres (flat approximation, fine for short ranges)
+function dSeg(p,a,b){
+  const k=111320,cx=Math.cos(p[0]*Math.PI/180);
+  const px=p[1]*k*cx,py=p[0]*k,ax=a[1]*k*cx,ay=a[0]*k,bx=b[1]*k*cx,by=b[0]*k;
+  const dx=bx-ax,dy=by-ay,l=dx*dx+dy*dy;
+  let t=l?((px-ax)*dx+(py-ay)*dy)/l:0;t=Math.max(0,Math.min(1,t));
+  return Math.hypot(px-(ax+t*dx),py-(ay+t*dy));
+}
+function hits(route){
+  const c=route.geometry.coordinates.map(([x,y])=>[y,x]);
+  return reports.filter(r=>{for(let i=0;i<c.length-1;i++){if(dSeg([r.lat,r.lng],c[i],c[i+1])<40)return true}return false});
+}
+async function reroute(fromReport){
+  if(!me||!dest)return;
+  const info=document.getElementById("info");info.textContent="Finding routes...";
+  try{
+    const u=`https://router.project-osrm.org/route/v1/driving/${me.lng},${me.lat};${dest.lng},${dest.lat}?alternatives=true&overview=full&geometries=geojson&steps=true`;
+    const d=await(await fetch(u)).json();
+    if(!d.routes||!d.routes.length){info.textContent="No route found between these points.";return}
+    // score: travel time + 5 min penalty per report sitting on the route
+    const scored=d.routes.map(r=>({r,h:hits(r),s:r.duration+hits(r).length*300})).sort((a,b)=>a.s-b.s);
+    const best=scored[0];lastRoute=best.r;
+    if(routeLine)map.removeLayer(routeLine);
+    routeLine=L.geoJSON(best.r.geometry,{style:{color:"#ff5a36",weight:6,opacity:.9}}).addTo(map);
+    map.fitBounds(routeLine.getBounds(),{padding:[60,60]});
+    const km=(best.r.distance/1000).toFixed(1),min=Math.round(best.r.duration/60);
+    let msg=`${km} km, about ${min} min (speed-limit estimate, not live traffic).`;
+    msg+=best.h.length?` ${best.h.length} report(s) on this route.`:` No reports on this route.`;
+    if(d.routes.length>1&&scored[0].r!==d.routes[0])msg+=" Rerouted around reports.";
+    info.textContent=msg;
+    const ol=document.getElementById("steps");ol.innerHTML="";
+    best.r.legs[0].steps.forEach(s=>{if(!s.maneuver)return;const li=document.createElement("li");
+      const t=s.maneuver.type,m=s.maneuver.modifier||"";
+      li.textContent=`${t==="arrive"?"Arrive":t==="depart"?"Head out":(t==="turn"?"Turn ":"")+m}${s.name?" on "+s.name:""} (${Math.round(s.distance)} m)`;ol.appendChild(li)});
+  }catch(e){info.textContent="Routing failed. If you opened this inside the Claude app, open the file in Chrome instead. Otherwise the free router may be busy; try again."}
+}
+
+map.on("click",e=>{
+  if(pendingType){add(pendingType,e.latlng.lat,e.latlng.lng);pendingType=null;document.querySelectorAll(".report button").forEach(x=>x.classList.remove("on"));return}
+  if(!dest)setDest(e.latlng.lat,e.latlng.lng);else if(!me){setMe(e.latlng.lat,e.latlng.lng);reroute()}else setDest(e.latlng.lat,e.latlng.lng);
+});
+document.getElementById("go").onclick=()=>{document.getElementById("q").value.trim()?search():reroute()};
+document.getElementById("q").addEventListener("keydown",e=>{if(e.key==="Enter")search()});
+document.getElementById("loc").onclick=locate;
+draw();locate();
+</script>
+</body>
+</html>
