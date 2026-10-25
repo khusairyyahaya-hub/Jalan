@@ -12,6 +12,7 @@ html,body{height:100%;margin:0;font-family:"Trebuchet MS",Verdana,sans-serif;col
 #map{position:absolute;inset:0}
 .top{position:absolute;z-index:1000;top:10px;left:10px;right:10px;max-width:460px;background:var(--panel);border-radius:14px;padding:10px;box-shadow:0 4px 16px rgba(0,0,0,.35)}
 .top input{width:100%;padding:11px 12px;border:2px solid var(--line);border-radius:10px;font-size:16px;background:#fff}
+.top input+input{margin-top:8px}
 .top input:focus{outline:3px solid var(--accent);border-color:var(--accent)}
 .row{display:flex;gap:8px;margin-top:8px}
 button{font:inherit;font-weight:700;border:0;border-radius:10px;padding:10px 12px;cursor:pointer;background:var(--bg);color:#fff}
@@ -33,9 +34,10 @@ button:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
 <body>
 <div id="map"></div>
 <div class="top">
+  <input id="from" placeholder="From (type a start, or tap the map)" aria-label="Start" autocomplete="off">
   <input id="q" placeholder="Where to? (e.g. KLCC, Penang airport)" aria-label="Destination" autocomplete="off">
   <ul id="res"></ul>
-  <div class="row"><button class="go" id="go">Get route</button><button id="loc">My location</button></div>
+  <div class="row"><button class="go" id="go">Get route</button><button id="loc">My location</button><button id="mute" aria-label="Turn voice on or off">&#128266;</button></div>
   <div id="info">Search a destination, or tap the map to set one.</div>
   <ol id="steps"></ol>
 </div>
@@ -56,6 +58,7 @@ L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:19,attribu
 
 let me=null,meMarker=null,dest=null,destMarker=null,routeLine=null,pendingType=null,lastRoute=null;
 const markers={};
+let watchId=null,nav=null,offCount=0,lastReroute=0,meFromGPS=false,muted=false,announceNext=false;
 
 // ---- reports (stored in this browser; swap for a backend to share between users)
 function load(){try{return JSON.parse(localStorage.getItem("jalan.reports")||"[]").filter(r=>Date.now()-r.t<TTL)}catch(e){return[]}}
@@ -85,28 +88,29 @@ function add(type,lat,lng){
 }
 
 // ---- geocode + routing (Nominatim + OSRM public demo servers)
-async function search(){
-  const q=document.getElementById("q").value.trim();if(!q)return;
+async function search(id){
+  const q=document.getElementById(id).value.trim();if(!q)return;
   const ul=document.getElementById("res");ul.innerHTML="<li>Searching...</li>";
   try{
     const r=await fetch("https://nominatim.openstreetmap.org/search?format=json&limit=5&q="+encodeURIComponent(q));
     const d=await r.json();
     ul.innerHTML=d.length?"":"<li>No match. Try a more specific name.</li>";
-    d.forEach(p=>{const li=document.createElement("li");li.textContent=p.display_name;li.onclick=()=>{ul.innerHTML="";setDest(+p.lat,+p.lon)};ul.appendChild(li)});
+    d.forEach(p=>{const li=document.createElement("li");li.textContent=p.display_name;li.onclick=()=>{ul.innerHTML="";document.getElementById(id).value=p.display_name.split(",").slice(0,2).join(",");id==="q"?setDest(+p.lat,+p.lon):setStart(+p.lat,+p.lon)};ul.appendChild(li)});
   }catch(e){ul.innerHTML="<li>Search failed. Check your internet connection.</li>"}
 }
 function setDest(lat,lng){
   dest={lat,lng};if(destMarker)map.removeLayer(destMarker);
   destMarker=L.marker([lat,lng],{icon:L.divIcon({className:"",html:'<div class="pin">\u{1F4CD}</div>',iconSize:[24,24],iconAnchor:[12,24]})}).addTo(map);map.setView([lat,lng],14);
-  if(me)reroute();else document.getElementById("info").textContent="Destination set. Tap My location, or tap the map to set your start.";
+  if(me)reroute();else document.getElementById("info").textContent="Destination set. Now type your start in the From box, or tap the map.";
 }
-function setMe(lat,lng){
-  me={lat,lng};if(meMarker)map.removeLayer(meMarker);
+function setMe(lat,lng,gps){
+  meFromGPS=!!gps;me={lat,lng};if(meMarker)map.removeLayer(meMarker);
   meMarker=L.circleMarker([lat,lng],{radius:9,color:"#fff",weight:3,fillColor:"#1a73e8",fillOpacity:1}).addTo(map);
 }
+function setStart(lat,lng){setMe(lat,lng);map.setView([lat,lng],14);if(dest)reroute();else document.getElementById("info").textContent="Start set. Now search your destination."}
 function locate(){
   if(!navigator.geolocation){toast("Location not available");return}
-  navigator.geolocation.getCurrentPosition(p=>{setMe(p.coords.latitude,p.coords.longitude);map.setView([me.lat,me.lng],14);if(dest)reroute()},()=>toast("Location blocked. Tap the map to set a start."),{enableHighAccuracy:true});
+  navigator.geolocation.getCurrentPosition(p=>{setMe(p.coords.latitude,p.coords.longitude,true);map.setView([me.lat,me.lng],14);if(dest)reroute()},()=>toast("GPS unavailable here. Type your start in the From box."),{enableHighAccuracy:true});
 }
 // distance from point to segment in metres (flat approximation, fine for short ranges)
 function dSeg(p,a,b){
@@ -129,7 +133,7 @@ async function reroute(fromReport){
     if(!d.routes||!d.routes.length){info.textContent="No route found between these points.";return}
     // score: travel time + 5 min penalty per report sitting on the route
     const scored=d.routes.map(r=>({r,h:hits(r),s:r.duration+hits(r).length*300})).sort((a,b)=>a.s-b.s);
-    const best=scored[0];lastRoute=best.r;
+    const best=scored[0];lastRoute=best.r;startNav(best.r);
     if(routeLine)map.removeLayer(routeLine);
     routeLine=L.geoJSON(best.r.geometry,{style:{color:"#ff5a36",weight:6,opacity:.9}}).addTo(map);
     map.fitBounds(routeLine.getBounds(),{padding:[60,60]});
@@ -137,7 +141,9 @@ async function reroute(fromReport){
     let msg=`${km} km, about ${min} min (speed-limit estimate, not live traffic).`;
     msg+=best.h.length?` ${best.h.length} report(s) on this route.`:` No reports on this route.`;
     if(d.routes.length>1&&scored[0].r!==d.routes[0])msg+=" Rerouted around reports.";
+    if(!meFromGPS)msg+=" Live voice turns need your GPS location as the start.";
     info.textContent=msg;
+    if(announceNext){announceNext=false;speak("Route ready. "+km+" kilometres, about "+min+" minutes."+(nav&&nav.steps[0]?" "+phrase(nav.steps[0])+".":""))}
     const ol=document.getElementById("steps");ol.innerHTML="";
     best.r.legs[0].steps.forEach(s=>{if(!s.maneuver)return;const li=document.createElement("li");
       const t=s.maneuver.type,m=s.maneuver.modifier||"";
@@ -145,12 +151,80 @@ async function reroute(fromReport){
   }catch(e){info.textContent="Routing failed. If you opened this inside the Claude app, open the file in Chrome instead. Otherwise the free router may be busy; try again."}
 }
 
+// ---- voice guidance + live following
+function speak(t){
+  if(muted||!window.speechSynthesis)return;
+  try{speechSynthesis.cancel();const u=new SpeechSynthesisUtterance(t);u.lang="en-GB";speechSynthesis.speak(u)}catch(e){}
+}
+function phrase(s){
+  const t=s.maneuver.type,m=s.maneuver.modifier||"",n=s.name?" onto "+s.name:"";
+  if(t==="arrive")return "You have arrived";
+  if(t==="depart")return "Head out"+(s.name?" on "+s.name:"");
+  if(t==="roundabout"||t==="rotary")return "Enter the roundabout"+(s.maneuver.exit?" and take exit "+s.maneuver.exit:"");
+  if(m==="uturn")return "Make a U-turn";
+  if(t==="continue"||t==="new name"||m==="straight")return "Continue straight"+(s.name?" on "+s.name:"");
+  return "Turn "+m+n;
+}
+function dist(a,b){
+  const R=6371000,k=Math.PI/180,dl=(b[0]-a[0])*k,dg=(b[1]-a[1])*k;
+  const x=Math.sin(dl/2)**2+Math.cos(a[0]*k)*Math.cos(b[0]*k)*Math.sin(dg/2)**2;
+  return 2*R*Math.asin(Math.sqrt(x));
+}
+function startNav(route){
+  nav={steps:route.legs[0].steps,i:1,s250:false,s60:false,line:route.geometry.coordinates.map(([x,y])=>[y,x])};
+  offCount=0;
+  if(meFromGPS&&navigator.geolocation&&watchId===null){
+    watchId=navigator.geolocation.watchPosition(onPos,()=>{},{enableHighAccuracy:true,maximumAge:1000});
+  }
+  try{navigator.wakeLock&&navigator.wakeLock.request("screen").catch(()=>{})}catch(e){}
+}
+function finishNav(){
+  nav=null;
+  if(watchId!==null){navigator.geolocation.clearWatch(watchId);watchId=null}
+}
+function onPos(p){
+  if(!meFromGPS)return;
+  const lat=p.coords.latitude,lng=p.coords.longitude;
+  setMe(lat,lng,true);
+  if(!nav||!dest)return;
+  map.panTo([lat,lng]);
+  let md=Infinity;
+  for(let i=0;i<nav.line.length-1;i++)md=Math.min(md,dSeg([lat,lng],nav.line[i],nav.line[i+1]));
+  if(md>60){
+    offCount++;
+    if(offCount>=3&&Date.now()-lastReroute>20000){lastReroute=Date.now();offCount=0;speak("Rerouting");reroute()}
+    return;
+  }
+  offCount=0;
+  const s=nav.steps[nav.i];if(!s)return;
+  const d=dist([lat,lng],[s.maneuver.location[1],s.maneuver.location[0]]);
+  if(s.maneuver.type==="arrive"&&d<30){speak("You have arrived");finishNav();return}
+  if(d<30){nav.i++;nav.s250=false;nav.s60=false;return}
+  const ph=phrase(s);
+  if(d<60&&!nav.s60){nav.s60=true;nav.s250=true;speak(ph+" now")}
+  else if(d<250&&!nav.s250){nav.s250=true;speak("In "+(Math.round(d/10)*10)+" metres, "+ph.charAt(0).toLowerCase()+ph.slice(1))}
+}
+document.getElementById("mute").onclick=function(){
+  muted=!muted;this.textContent=muted?"\u{1F507}":"\u{1F50A}";
+  if(muted&&window.speechSynthesis)speechSynthesis.cancel();
+};
+
 map.on("click",e=>{
   if(pendingType){add(pendingType,e.latlng.lat,e.latlng.lng);pendingType=null;document.querySelectorAll(".report button").forEach(x=>x.classList.remove("on"));return}
   if(!dest)setDest(e.latlng.lat,e.latlng.lng);else if(!me){setMe(e.latlng.lat,e.latlng.lng);reroute()}else setDest(e.latlng.lat,e.latlng.lng);
 });
-document.getElementById("go").onclick=()=>{document.getElementById("q").value.trim()?search():reroute()};
-document.getElementById("q").addEventListener("keydown",e=>{if(e.key==="Enter")search()});
+const qEl=document.getElementById("q"),fEl=document.getElementById("from");
+qEl.addEventListener("input",()=>{dest=null});
+fEl.addEventListener("input",()=>{me=null});
+qEl.addEventListener("keydown",e=>{if(e.key==="Enter")search("q")});
+fEl.addEventListener("keydown",e=>{if(e.key==="Enter")search("from")});
+document.getElementById("go").onclick=()=>{
+  announceNext=true;speak("Voice guidance is on. Finding your route.");
+  if(qEl.value.trim()&&!dest)search("q");
+  else if(fEl.value.trim()&&!me)search("from");
+  else if(me&&dest)reroute();
+  else document.getElementById("info").textContent="Set a start (From box or map tap) and a destination.";
+};
 document.getElementById("loc").onclick=locate;
 draw();locate();
 </script>
