@@ -17,7 +17,7 @@ html,body{height:100%;margin:0;font-family:"Trebuchet MS",Verdana,sans-serif;col
 #barTxt{flex:1;font-weight:700;font-size:15px;line-height:1.3}
 #tog{padding:6px 12px}
 .mb{position:absolute;z-index:1000;right:10px;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:8px}
-.mb button{background:var(--panel);color:var(--ink);box-shadow:0 3px 10px rgba(0,0,0,.35);padding:10px 12px;font-size:14px}
+.mb button{background:var(--panel);color:var(--ink);box-shadow:0 3px 10px rgba(0,0,0,.35);width:52px;height:52px;border-radius:50%;padding:0;font-size:22px}
 .top.min #body{display:none}
 .top.min #bar{margin-bottom:0}
 .opts{display:flex;gap:14px;margin-top:8px;font-size:14px;align-items:center;flex-wrap:wrap}
@@ -27,9 +27,33 @@ html,body{height:100%;margin:0;font-family:"Trebuchet MS",Verdana,sans-serif;col
 #lanes{display:none;gap:4px;margin:0 0 8px;justify-content:center}
 #lanes span{min-width:34px;text-align:center;padding:4px;border-radius:6px;background:#e8e0c8;color:#9a9078;font-size:20px;font-weight:700}
 #lanes span.v{background:var(--bg);color:#fff}
+#navtop{display:none;position:absolute;z-index:1002;top:10px;left:10px;right:10px;background:#005f63;color:#fff;border-radius:18px;padding:14px 16px;box-shadow:0 4px 16px rgba(0,0,0,.4)}
+#nt-main{display:flex;align-items:center;gap:16px}
+#nt-arrow{font-size:54px;line-height:1;min-width:60px;text-align:center}
+#nt-dist{font-size:34px;font-weight:700;line-height:1.1}
+#nt-text{font-size:19px;line-height:1.25}
+#nt-then{margin-top:10px;font-size:16px;border-top:1px solid rgba(255,255,255,.3);padding-top:8px}
+#nt-then-arrow{font-size:22px;margin-left:6px}
+#navtop #lanes{margin:10px 0 0}
+#navtop #lanes span{background:rgba(255,255,255,.2);color:#d6ecec}
+#navtop #lanes span.v{background:#fff;color:#005f63}
+#navbot{display:none;position:absolute;z-index:1002;left:0;right:0;bottom:0;background:#fff;padding:12px 16px calc(14px + env(safe-area-inset-bottom,0px));align-items:center;justify-content:space-between;box-shadow:0 -4px 16px rgba(0,0,0,.25);border-radius:22px 22px 0 0}
+#navbot button{width:52px;height:52px;border-radius:50%;padding:0;font-size:22px;background:#fff;color:var(--ink);border:2px solid var(--line)}
+#nb-mid{text-align:center}
+#nb-eta{font-size:32px;font-weight:700;color:#1b8a5a;line-height:1.1}
+#nb-sub{font-size:16px;color:#555}
+#startbtn{display:none;position:absolute;z-index:1000;left:50%;transform:translateX(-50%);bottom:calc(84px + env(safe-area-inset-bottom,0px));background:#1b8a5a;color:#fff;font-size:20px;padding:14px 40px;border-radius:30px;box-shadow:0 4px 14px rgba(0,0,0,.4)}
+body.nav #navtop{display:block}
+body.nav #navbot{display:flex}
+body.nav .top{display:none}
+body.nav .report{display:none}
+body.nav.rep .report{display:flex;bottom:calc(210px + env(safe-area-inset-bottom,0px))}
+body.nav #hud{bottom:calc(120px + env(safe-area-inset-bottom,0px))}
+body.nav #toast{bottom:130px}
+body.nav #startbtn{display:none!important}
 #hud{position:absolute;z-index:1000;left:10px;bottom:calc(76px + env(safe-area-inset-bottom,0px));display:none;gap:8px;align-items:center}
-.spd{background:var(--bg);color:#fff;border-radius:12px;padding:6px 10px;text-align:center;line-height:1}
-.spd b{font-size:26px;display:block}.spd small{font-size:11px}.spd.over{background:#c62828}
+.spd{background:#fff;color:#111;border-radius:50%;width:66px;height:66px;display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1;box-shadow:0 3px 10px rgba(0,0,0,.35)}
+.spd b{font-size:26px;display:block}.spd small{font-size:11px}.spd.over{background:#c62828;color:#fff}
 .lim{width:46px;height:46px;border-radius:50%;border:5px solid #d32f2f;background:#fff;color:#111;font-weight:800;font-size:18px;display:flex;align-items:center;justify-content:center}
 .top input:focus{outline:3px solid var(--accent);border-color:var(--accent)}
 .row{display:flex;gap:8px;margin-top:8px}
@@ -71,10 +95,20 @@ button:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
   <button data-t="hazard">&#9888;&#65039; Hazard</button>
   <button data-t="jam">&#128678; Jam</button>
 </div>
+<button id="startbtn">Start</button>
+<div id="navtop">
+  <div id="nt-main"><span id="nt-arrow">&#8593;</span><div><div id="nt-dist">--</div><div id="nt-text"></div></div></div>
+  <div id="nt-then">Then <span id="nt-then-arrow"></span></div>
+</div>
+<div id="navbot">
+  <button id="endnav" aria-label="End navigation">&#10005;</button>
+  <div id="nb-mid"><div id="nb-eta">-- min</div><div id="nb-sub"></div></div>
+  <button id="nb-rep" aria-label="Report on the road">&#9888;&#65039;</button>
+</div>
 <div id="hud"></div>
 <div class="mb">
-  <button id="follow">Follow me</button>
-  <button id="whole">Whole route</button>
+  <button id="follow" aria-label="Follow my location">&#10148;</button>
+  <button id="whole" aria-label="Show whole route">&#128506;</button><button id="mute2" aria-label="Voice on or off">&#128266;</button>
 </div>
 <div id="toast"></div>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
@@ -87,7 +121,7 @@ L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:19,attribu
 
 let me=null,meMarker=null,dest=null,destMarker=null,routeLine=null,pendingType=null,lastRoute=null;
 const markers={};
-let watchId=null,nav=null,offCount=0,lastReroute=0,meFromGPS=false,muted=false,announceNext=false,follow=false,lim=null,cams=[],lastRoad=0,speedKmh=null,camSaid={},hiddenAt=0;
+let watchId=null,nav=null,offCount=0,lastReroute=0,meFromGPS=false,muted=false,announceNext=false,follow=false,navMode=false,heading=0,lim=null,cams=[],lastRoad=0,speedKmh=null,camSaid={},hiddenAt=0;
 
 // ---- reports (stored in this browser; swap for a backend to share between users)
 function load(){try{return JSON.parse(localStorage.getItem("jalan.reports")||"[]").filter(r=>Date.now()-r.t<TTL)}catch(e){return[]}}
@@ -134,7 +168,7 @@ function setDest(lat,lng){
 }
 function setMe(lat,lng,gps){
   meFromGPS=!!gps;me={lat,lng};if(meMarker)map.removeLayer(meMarker);
-  meMarker=L.circleMarker([lat,lng],{radius:9,color:"#fff",weight:3,fillColor:"#1a73e8",fillOpacity:1}).addTo(map);
+  meMarker=L.marker([lat,lng],{interactive:false,zIndexOffset:1000,icon:L.divIcon({className:"",iconSize:[44,44],iconAnchor:[22,22],html:'<svg width="44" height="44" viewBox="0 0 44 44" style="transform:rotate('+(heading||0)+'deg)"><circle cx="22" cy="22" r="19" fill="#fff" stroke="#cfd8e3" stroke-width="2"/><path d="M22 8L31 33L22 27L13 33Z" fill="#1a73e8"/></svg>'})}).addTo(map);
 }
 function setStart(lat,lng){setMe(lat,lng);map.setView([lat,lng],14);if(dest)reroute();else document.getElementById("info").textContent="Start set. Now search your destination."}
 function locate(){
@@ -166,7 +200,7 @@ async function reroute(fromReport){
     const scored=d.routes.map(r=>({r,h:hits(r),s:r.duration+hits(r).length*300})).sort((a,b)=>a.s-b.s);
     const best=scored[0];lastRoute=best.r;startNav(best.r);
     if(routeLine)map.removeLayer(routeLine);
-    routeLine=L.geoJSON(best.r.geometry,{style:{color:"#ff5a36",weight:6,opacity:.9}}).addTo(map);
+    routeLine=L.geoJSON(best.r.geometry,{style:{color:"#4318ff",weight:9,opacity:.95}}).addTo(map);
     if(announceNext||!nav||!follow)map.fitBounds(routeLine.getBounds(),{padding:[90,60]});
     const km=(best.r.distance/1000).toFixed(1),min=Math.round(best.r.duration/60);
     let msg=`${km} km, about ${min} min (speed-limit estimate, not live traffic).`;
@@ -174,7 +208,7 @@ async function reroute(fromReport){
     if(d.routes.length>1&&scored[0].r!==d.routes[0])msg+=" Rerouted around reports.";
     msg+=exNote+leaveBy(best.r.duration);if(!meFromGPS)msg+=" Live voice turns need your GPS location as the start.";
     info.textContent=msg;
-    setMin(true);document.getElementById("barTxt").textContent=min+" min, "+km+" km. "+(best.r.legs[0].steps[0]?phrase(best.r.legs[0].steps[0]):"");
+    if(!navMode)document.getElementById("startbtn").style.display="block";setMin(true);document.getElementById("barTxt").textContent=min+" min, "+km+" km. "+(best.r.legs[0].steps[0]?phrase(best.r.legs[0].steps[0]):"");
     if(announceNext){announceNext=false;speak("Route ready. "+km+" kilometres, about "+min+" minutes."+(nav&&nav.steps[0]?" "+phrase(nav.steps[0])+".":""))}
     const ol=document.getElementById("steps");ol.innerHTML="";
     best.r.legs[0].steps.forEach(s=>{if(!s.maneuver)return;const li=document.createElement("li");
@@ -205,7 +239,7 @@ function dist(a,b){
 function startNav(route){
   if(announceNext)follow=false;nav={steps:route.legs[0].steps,i:1,s250:false,s60:false,line:route.geometry.coordinates.map(([x,y])=>[y,x])};
   offCount=0;
-  if(meFromGPS&&navigator.geolocation&&watchId===null){
+  if(meFromGPS&&navigator.geolocation&&watchId===null&&(navMode||announceNext)){
     watchId=navigator.geolocation.watchPosition(onPos,()=>{},{enableHighAccuracy:true,maximumAge:1000});
   }
   keepAwake();
@@ -221,6 +255,7 @@ function onPos(p){
   let lat=rl,lng=rg;
   const sp=snapRoute(rl,rg);if(sp){lat=sp[0];lng=sp[1]}
   speedKmh=p.coords.speed!=null?p.coords.speed*3.6:null;
+  if(p.coords.heading!=null&&!isNaN(p.coords.heading))heading=p.coords.heading;
   setMe(lat,lng,true);roadInfo(rl,rg);camCheck(lat,lng);updateHud();
   if(!nav||!dest)return;
   if(follow)map.panTo([lat,lng]);
@@ -234,9 +269,9 @@ function onPos(p){
   offCount=0;
   const s=nav.steps[nav.i];if(!s)return;
   const d=dist([lat,lng],[s.maneuver.location[1],s.maneuver.location[0]]);
-  if(s.maneuver.type==="arrive"&&d<30){speak("You have arrived");finishNav();return}
+  if(s.maneuver.type==="arrive"&&d<30){speak("You have arrived");toast("You have arrived");exitNav();return}
   if(d<30){nav.i++;nav.s250=false;nav.s60=false;return}
-  const ph=phrase(s);showLanes(s,d);
+  const ph=phrase(s);showLanes(s,d);updateNavUI(d,s);
   document.getElementById("barTxt").textContent="In "+(d>=1000?(d/1000).toFixed(1)+" km":Math.round(d/10)*10+" m")+": "+ph;
   if(d<60&&!nav.s60){nav.s60=true;nav.s250=true;speak(ph+" now")}
   else if(d<250&&!nav.s250){nav.s250=true;speak("In "+(Math.round(d/10)*10)+" metres, "+ph.charAt(0).toLowerCase()+ph.slice(1))}
@@ -309,6 +344,42 @@ function leaveBy(sec){
   return " To arrive by "+v+", leave by "+l.toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"})+" (5 min buffer, no live traffic).";
 }
 ["notoll","nohwy","arr"].forEach(id=>document.getElementById(id).addEventListener("change",()=>{if(me&&dest)reroute()}));
+function arrowFor(s){const t=s.maneuver.type,m=s.maneuver.modifier||"";if(t==="arrive")return"\u2691";if(t==="roundabout"||t==="rotary")return"\u21BB";return AR[m]||"\u2191"}
+function fmtD(d){return d>=1000?(d/1000).toFixed(1)+" km":(Math.round(d/10)*10)+" m"}
+function updateNavUI(d,s){
+  if(!navMode||!nav||!s||!lastRoute)return;
+  const s2=nav.steps[nav.i+1],th=document.getElementById("nt-then");
+  document.getElementById("nt-arrow").textContent=arrowFor(s);
+  document.getElementById("nt-dist").textContent=fmtD(d);
+  document.getElementById("nt-text").textContent=phrase(s);
+  if(s2){th.style.display="block";document.getElementById("nt-then-arrow").textContent=arrowFor(s2)}else th.style.display="none";
+  let rem=d;for(let j=nav.i;j<nav.steps.length;j++)rem+=nav.steps[j].distance;
+  const r=lastRoute,sec=r.distance?r.duration*rem/r.distance:0;
+  document.getElementById("nb-eta").textContent=Math.max(1,Math.round(sec/60))+" min";
+  document.getElementById("nb-sub").textContent=(rem/1000).toFixed(1)+" km \u2022 "+new Date(Date.now()+sec*1000).toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"});
+}
+function enterNav(){
+  if(!lastRoute){toast("Get a route first");return}
+  navMode=true;if(!nav)startNav(lastRoute);
+  document.body.classList.add("nav");document.getElementById("startbtn").style.display="none";
+  document.getElementById("navtop").appendChild(document.getElementById("lanes"));
+  follow=true;if(me)map.setView([me.lat,me.lng],17);
+  const s=nav.steps[nav.i];
+  if(s&&me)updateNavUI(dist([me.lat,me.lng],[s.maneuver.location[1],s.maneuver.location[0]]),s);
+  if(!meFromGPS)toast("Live guidance needs GPS as your start");
+  speak("Navigation started. "+(nav.steps[0]?phrase(nav.steps[0]):""));
+}
+function exitNav(){
+  navMode=false;document.body.classList.remove("nav","rep");follow=false;finishNav();
+  document.querySelector(".top").insertBefore(document.getElementById("lanes"),document.getElementById("body"));
+  document.getElementById("startbtn").style.display="block";setMin(false);
+  if(routeLine)map.fitBounds(routeLine.getBounds(),{padding:[90,60]});
+}
+document.getElementById("startbtn").onclick=enterNav;
+document.getElementById("endnav").onclick=exitNav;
+document.getElementById("nb-rep").onclick=()=>document.body.classList.toggle("rep");
+document.getElementById("rep").addEventListener("click",()=>document.body.classList.remove("rep"));
+document.getElementById("mute2").onclick=()=>document.getElementById("mute").click();
 function setMin(v){
   document.querySelector(".top").classList.toggle("min",v);
   document.getElementById("tog").textContent=v?"Search":"Hide";
@@ -317,7 +388,7 @@ document.getElementById("tog").onclick=()=>setMin(!document.querySelector(".top"
 document.getElementById("barTxt").onclick=()=>setMin(false);
 ["q","from"].forEach(id=>document.getElementById(id).addEventListener("focus",()=>setMin(false)));
 document.getElementById("mute").onclick=function(){
-  muted=!muted;this.textContent=muted?"\u{1F507}":"\u{1F50A}";
+  muted=!muted;document.querySelectorAll("#mute,#mute2").forEach(b=>b.textContent=muted?"\u{1F507}":"\u{1F50A}");
   if(muted&&window.speechSynthesis)speechSynthesis.cancel();
 };
 
