@@ -226,9 +226,11 @@ document.getElementById("mute").onclick=function(){
   if(muted&&window.speechSynthesis)speechSynthesis.cancel();
 };
 
+window.pick=(lat,lng,w)=>{map.closePopup();w==="to"?setDest(lat,lng):setStart(lat,lng)};
 map.on("click",e=>{
   if(pendingType){add(pendingType,e.latlng.lat,e.latlng.lng);pendingType=null;document.querySelectorAll(".report button").forEach(x=>x.classList.remove("on"));return}
-  if(!dest)setDest(e.latlng.lat,e.latlng.lng);else if(!me){setMe(e.latlng.lat,e.latlng.lng);reroute()}else setDest(e.latlng.lat,e.latlng.lng);
+  const a=e.latlng.lat.toFixed(6),b=e.latlng.lng.toFixed(6);
+  L.popup().setLatLng(e.latlng).setContent(`<button style="padding:6px 10px" onclick="pick(${a},${b},'to')">Go here</button> <button style="padding:6px 10px" onclick="pick(${a},${b},'from')">Start here</button>`).openOn(map);
 });
 const qEl=document.getElementById("q"),fEl=document.getElementById("from");
 qEl.addEventListener("input",()=>{dest=null});
