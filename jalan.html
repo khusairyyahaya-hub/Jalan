@@ -64,6 +64,14 @@ body.nav #startbtn{display:none!important}
 .sec{font-weight:700;margin-top:12px}
 .sheetbtns{display:flex;gap:8px;margin-top:12px}
 .sheetbtns button{flex:1;background:#fff;color:var(--ink);border:2px solid var(--line)}
+.mb{align-items:flex-end}
+.mb #follow{width:auto;border-radius:26px;padding:0 16px;font-size:14px;font-weight:700}
+.mb #follow.on{background:var(--accent);color:#fff}
+#attr{position:absolute;z-index:999;left:6px;bottom:calc(2px + env(safe-area-inset-bottom,0px));font-size:10px;background:rgba(255,255,255,.8);padding:1px 5px;border-radius:4px}
+body.nav #attr{left:auto;right:6px;bottom:calc(84px + env(safe-area-inset-bottom,0px))}
+body.hu #map{inset:auto;left:50%;top:50%;width:125vmax;height:125vmax;margin:-62.5vmax 0 0 -62.5vmax;transition:transform .5s linear}
+body.hu .leaflet-control-container{display:none}
+body.hu .pin{transform:rotate(var(--hdg,0deg))}
 #hud{position:absolute;z-index:1000;left:10px;bottom:calc(76px + env(safe-area-inset-bottom,0px));display:none;gap:8px;align-items:center}
 .spd{background:#fff;color:#111;border-radius:50%;width:66px;height:66px;display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1;box-shadow:0 3px 10px rgba(0,0,0,.35)}
 .spd b{font-size:26px;display:block}.spd small{font-size:11px}.spd.over{background:#c62828;color:#fff}
@@ -125,9 +133,10 @@ button:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
   <div id="nb-mid"><div id="nb-eta">-- min</div><div id="nb-sub"></div></div>
   <button id="nb-rep" aria-label="Report on the road">&#9888;&#65039;</button>
 </div>
+<div id="attr">&copy; OpenStreetMap contributors</div>
 <div id="hud"></div>
 <div class="mb">
-  <button id="follow" aria-label="Follow my location">&#10148;</button>
+  <button id="follow" class="on" aria-label="Map orientation">&#10148; North Up</button><button id="recenter" aria-label="Centre on my location">&#9678;</button>
   <button id="whole" aria-label="Show whole route">&#128506;</button><button id="mute2" aria-label="Voice on or off">&#128266;</button><button id="more" aria-label="Quick search, stops and new drive">&#9776;</button>
 </div>
 <div id="toast"></div>
@@ -135,13 +144,13 @@ button:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
 <script>
 const ICON={police:"\u{1F46E}",crash:"\u{1F4A5}",hazard:"\u26A0\uFE0F",jam:"\u{1F6A6}"};
 const TTL=2*60*60*1000; // reports expire after 2 hours
-const map=L.map("map",{zoomControl:false}).setView([3.139,101.687],12);
+const map=L.map("map",{zoomControl:false,attributionControl:false}).setView([3.139,101.687],12);
 L.control.zoom({position:"bottomright"}).addTo(map);
 L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:19,attribution:"&copy; OpenStreetMap"}).addTo(map);
 
 let me=null,meMarker=null,dest=null,destMarker=null,routeLine=null,pendingType=null,lastRoute=null;
 const markers={};
-let watchId=null,nav=null,offCount=0,lastReroute=0,meFromGPS=false,muted=false,announceNext=false,follow=false,navMode=false,heading=0,stops=[],stopMarkers=[],lim=null,cams=[],lastRoad=0,speedKmh=null,camSaid={},hiddenAt=0;
+let watchId=null,nav=null,offCount=0,lastReroute=0,meFromGPS=false,muted=false,announceNext=false,follow=false,navMode=false,heading=0,stops=[],stopMarkers=[],hu=false,rot=0,lim=null,cams=[],lastRoad=0,speedKmh=null,camSaid={},hiddenAt=0;
 
 // ---- reports (stored in this browser; swap for a backend to share between users)
 function load(){try{return JSON.parse(localStorage.getItem("jalan.reports")||"[]").filter(r=>Date.now()-r.t<TTL)}catch(e){return[]}}
@@ -188,7 +197,7 @@ function setDest(lat,lng){
 }
 function setMe(lat,lng,gps){
   meFromGPS=!!gps;me={lat,lng};if(meMarker)map.removeLayer(meMarker);
-  meMarker=L.marker([lat,lng],{interactive:false,zIndexOffset:1000,icon:L.divIcon({className:"",iconSize:[44,44],iconAnchor:[22,22],html:'<svg width="44" height="44" viewBox="0 0 44 44" style="transform:rotate('+(heading||0)+'deg)"><circle cx="22" cy="22" r="19" fill="#fff" stroke="#cfd8e3" stroke-width="2"/><path d="M22 8L31 33L22 27L13 33Z" fill="#1a73e8"/></svg>'})}).addTo(map);
+  meMarker=L.marker([lat,lng],{interactive:false,zIndexOffset:1000,icon:L.divIcon({className:"",iconSize:[44,44],iconAnchor:[22,22],html:'<svg width="44" height="44" viewBox="0 0 44 44" style="transform:rotate('+(hu?0:(heading||0))+'deg)"><circle cx="22" cy="22" r="19" fill="#fff" stroke="#cfd8e3" stroke-width="2"/><path d="M22 8L31 33L22 27L13 33Z" fill="#1a73e8"/></svg>'})}).addTo(map);
 }
 function setStart(lat,lng){setMe(lat,lng);map.setView([lat,lng],14);if(dest)reroute();else document.getElementById("info").textContent="Start set. Now search your destination."}
 function locate(){
@@ -276,6 +285,7 @@ function onPos(p){
   const sp=snapRoute(rl,rg);if(sp){lat=sp[0];lng=sp[1]}
   speedKmh=p.coords.speed!=null?p.coords.speed*3.6:null;
   if(p.coords.heading!=null&&!isNaN(p.coords.heading))heading=p.coords.heading;
+  if(hu&&speedKmh!=null&&speedKmh>3)setRot(heading);
   setMe(lat,lng,true);roadInfo(rl,rg);camCheck(lat,lng);updateHud();
   if(!nav||!dest)return;
   if(follow)map.panTo([lat,lng]);
@@ -298,7 +308,7 @@ function onPos(p){
   if(d<60&&!nav.s60){nav.s60=true;nav.s250=true;speak(ph+" now")}
   else if(d<250&&!nav.s250){nav.s250=true;speak("In "+(Math.round(d/10)*10)+" metres, "+ph.charAt(0).toLowerCase()+ph.slice(1))}
 }
-document.getElementById("follow").onclick=()=>{
+document.getElementById("recenter").onclick=()=>{
   if(!meFromGPS){toast("Following needs GPS as your start");return}
   follow=true;map.setView([me.lat,me.lng],Math.max(map.getZoom(),16));toast("Following your location");
 };
@@ -306,7 +316,7 @@ document.getElementById("whole").onclick=()=>{
   follow=false;
   if(routeLine)map.fitBounds(routeLine.getBounds(),{padding:[90,60]});else toast("Get a route first");
 };
-map.getContainer().addEventListener("pointerdown",()=>{follow=false});
+map.getContainer().addEventListener("pointerdown",()=>{if(!hu)follow=false});
 const AR={left:"\u2190","slight left":"\u2196","sharp left":"\u2199",straight:"\u2191",right:"\u2192","slight right":"\u2197","sharp right":"\u2198",uturn:"\u21B6"};
 function snapRoute(lat,lng){
   if(!nav)return null;
@@ -385,7 +395,7 @@ function enterNav(){
   navMode=true;if(!nav)startNav(lastRoute);
   document.body.classList.add("nav");document.getElementById("startbtn").style.display="none";
   document.getElementById("navtop").appendChild(document.getElementById("lanes"));
-  follow=true;if(me)map.setView([me.lat,me.lng],17);
+  follow=true;if(me)map.setView([me.lat,me.lng],17);if(hu)setRot(curHeading());
   const s=nav.steps[nav.i];
   if(s&&me)updateNavUI(dist([me.lat,me.lng],[s.maneuver.location[1],s.maneuver.location[0]]),s);
   if(!meFromGPS)toast("Live guidance needs GPS as your start");
@@ -508,6 +518,37 @@ document.getElementById("nb-mid").onclick=()=>document.getElementById("sheet").c
 document.getElementById("newdrive").onclick=newDrive;
 document.getElementById("clearstops").onclick=()=>{stops=[];drawStops();closeSheet();if(me&&dest)reroute()};
 map.getContainer().addEventListener("pointerdown",closeSheet);
+function bearing(a,b){
+  const k=Math.PI/180,dl=(b[1]-a[1])*k,y=Math.sin(dl)*Math.cos(b[0]*k),x=Math.cos(a[0]*k)*Math.sin(b[0]*k)-Math.sin(a[0]*k)*Math.cos(b[0]*k)*Math.cos(dl);
+  return (Math.atan2(y,x)/k+360)%360;
+}
+function curHeading(){
+  if(speedKmh!=null&&speedKmh>3&&heading!=null)return heading;
+  if(lastRoute){
+    const c=lastRoute.geometry.coordinates,i=me?routeIdx({lat:me.lat,lng:me.lng}):0,j=Math.min(i+4,c.length-1);
+    if(i<j)return bearing([c[i][1],c[i][0]],[c[j][1],c[j][0]]);
+  }
+  return heading||0;
+}
+function setRot(h){
+  rot+=((h-rot+540)%360)-180;
+  document.getElementById("map").style.transform="rotate("+(-rot)+"deg)";
+  document.documentElement.style.setProperty("--hdg",rot+"deg");
+}
+function applyOrient(){
+  document.body.classList.toggle("hu",hu);
+  const b=document.getElementById("follow");
+  b.classList.toggle("on",!hu);
+  b.innerHTML="&#10148; "+(hu?"Moving Direction":"North Up");
+  map.options.touchZoom=hu?"center":true;
+  if(hu)map.dragging.disable();else map.dragging.enable();
+  if(hu)setRot(curHeading());
+  else{rot=0;document.getElementById("map").style.transform="";document.documentElement.style.setProperty("--hdg","0deg")}
+  setTimeout(()=>{map.invalidateSize();if(me&&(follow||hu))map.panTo([me.lat,me.lng],{animate:false})},60);
+  if(me)setMe(me.lat,me.lng,meFromGPS);
+  toast(hu?"Moving Direction: map turns as you drive":"North Up");
+}
+document.getElementById("follow").onclick=()=>{hu=!hu;applyOrient()};
 function setMin(v){
   document.querySelector(".top").classList.toggle("min",v);
   document.getElementById("tog").textContent=v?"Search":"Hide";
@@ -521,7 +562,7 @@ document.getElementById("mute").onclick=function(){
 };
 
 window.pick=(lat,lng,w)=>{map.closePopup();w==="to"?setDest(lat,lng):setStart(lat,lng)};
-map.on("click",e=>{
+map.on("click",e=>{if(hu){toast("Switch to North Up to pick a point on the map");return}
   if(pendingType){add(pendingType,e.latlng.lat,e.latlng.lng);pendingType=null;document.querySelectorAll(".report button").forEach(x=>x.classList.remove("on"));return}
   const a=e.latlng.lat.toFixed(6),b=e.latlng.lng.toFixed(6);
   L.popup().setLatLng(e.latlng).setContent(`<button style="padding:6px 10px" onclick="pick(${a},${b},'to')">Go here</button> <button style="padding:6px 10px" onclick="pick(${a},${b},'from')">Start here</button>`).openOn(map);
