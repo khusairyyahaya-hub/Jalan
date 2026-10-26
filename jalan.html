@@ -3,122 +3,168 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#dfe6ec">
 <title>Jalan - crowd-reported navigation</title>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <style>
-:root{--bg:#10202b;--panel:#fff8e7;--ink:#10202b;--accent:#ff5a36;--ok:#1b8a5a;--line:#d9cfb4}
+:root{--ink:#0c1b26;--ink2:#4a5b6c;--glass:rgba(255,255,255,.50);--glass2:rgba(255,255,255,.80);--brd:rgba(255,255,255,.75);--field:rgba(255,255,255,.55);--tint:#0a84ff;--tint2:rgba(10,132,255,.9);--ok:#1fa463;--sh:0 10px 34px rgba(8,28,48,.22)}
+@media (prefers-color-scheme:dark){:root{--ink:#f2f6fa;--ink2:#a9b6c4;--glass:rgba(32,38,46,.52);--glass2:rgba(32,38,46,.82);--brd:rgba(255,255,255,.2);--field:rgba(255,255,255,.1);--sh:0 10px 34px rgba(0,0,0,.5)}.leaflet-tile-pane{filter:brightness(.8) saturate(.9)}}
 *{box-sizing:border-box}
-html,body{height:100%;margin:0;font-family:"Trebuchet MS",Verdana,sans-serif;color:var(--ink)}
+html,body{height:100%;margin:0;overflow:hidden;background:#dfe6ec;color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display","Segoe UI",Roboto,system-ui,sans-serif;-webkit-tap-highlight-color:transparent}
 #map{position:absolute;inset:0}
-.top{position:absolute;z-index:1000;top:10px;left:10px;right:10px;max-width:460px;background:var(--panel);border-radius:14px;padding:10px;box-shadow:0 4px 16px rgba(0,0,0,.35)}
-.top input{width:100%;padding:11px 12px;border:2px solid var(--line);border-radius:10px;font-size:16px;background:#fff}
-.top input+input{margin-top:8px}
-#bar{display:flex;align-items:center;gap:8px;margin-bottom:8px}
-#barTxt{flex:1;font-weight:700;font-size:15px;line-height:1.3}
-#tog{padding:6px 12px}
-.mb{position:absolute;z-index:1003;right:10px;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:8px}
-.mb button{background:var(--panel);color:var(--ink);box-shadow:0 3px 10px rgba(0,0,0,.35);width:52px;height:52px;border-radius:50%;padding:0;font-size:22px}
+button{font:inherit;font-weight:600;color:var(--ink);background:transparent;border:0;cursor:pointer;transition:transform .15s,background .2s}
+button:active{transform:scale(.94)}
+button:focus-visible,input:focus-visible{outline:3px solid var(--tint);outline-offset:2px}
+svg.i{width:24px;height:24px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+
+/* ---- liquid glass surface ---- */
+.glass,#navbot,#sheet,#recenter,#toast,#attr,.spd{background:var(--glass);-webkit-backdrop-filter:blur(24px) saturate(185%);backdrop-filter:blur(24px) saturate(185%);border:1px solid var(--brd);box-shadow:var(--sh),inset 0 1px 0 var(--brd),inset 0 -1px 0 rgba(255,255,255,.16);color:var(--ink)}
+.glass::before,#navbot::before,#recenter::before,.spd::before{content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;z-index:-1;background:linear-gradient(155deg,rgba(255,255,255,.5) 0%,rgba(255,255,255,0) 42%)}
+
+/* ---- search card ---- */
+.top{position:absolute;z-index:1000;top:calc(10px + env(safe-area-inset-top,0px));left:10px;right:10px;max-width:460px;padding:12px;border-radius:30px}
+#bar{display:flex;align-items:center;gap:8px;margin-bottom:10px}
+#barTxt{flex:1;font-weight:700;font-size:15px;line-height:1.3;padding-left:6px;cursor:pointer}
+#tog{padding:8px 16px;border-radius:20px;background:var(--field);border:1px solid var(--brd);font-size:14px}
 .top.min #body{display:none}
 .top.min #bar{margin-bottom:0}
-.opts{display:flex;gap:14px;margin-top:8px;font-size:14px;align-items:center;flex-wrap:wrap}
-.opts label{display:flex;align-items:center;gap:6px}
-.opts input{width:auto;padding:0;border:0;margin:0}
-.opts input[type=time]{padding:5px;border:2px solid var(--line);border-radius:8px}
-#lanes{display:none;gap:4px;margin:0 0 8px;justify-content:center}
-#lanes span{min-width:34px;text-align:center;padding:4px;border-radius:6px;background:#e8e0c8;color:#9a9078;font-size:20px;font-weight:700}
-#lanes span.v{background:var(--bg);color:#fff}
-#navtop{display:none;position:absolute;z-index:1002;top:10px;left:10px;right:10px;background:#005f63;color:#fff;border-radius:18px;padding:14px 16px;box-shadow:0 4px 16px rgba(0,0,0,.4)}
+.field{display:flex;align-items:center;gap:10px;margin-top:8px;padding:0 16px;border-radius:22px;background:var(--field);border:1px solid var(--brd);box-shadow:inset 0 1px 3px rgba(0,0,0,.08)}
+.field:focus-within{outline:2.5px solid var(--tint);outline-offset:1px}
+.field input{flex:1;min-width:0;border:0;background:transparent;font:inherit;font-size:16px;padding:14px 0;color:var(--ink);outline:none}
+.field input::placeholder{color:var(--ink2);opacity:.85}
+.dot{width:10px;height:10px;border-radius:50%;flex:none}.dot.from{background:var(--tint)}.dot.to{background:#ff453a}
+#res{margin:8px 0 0;padding:0;list-style:none;max-height:240px;overflow:auto}
+#res li{padding:12px 14px;margin-bottom:6px;border-radius:18px;background:var(--field);border:1px solid var(--brd);cursor:pointer;font-size:14px;line-height:1.35}
+#res li:hover,#res li:active{background:var(--glass2);outline:2px solid var(--tint)}
+.row{display:flex;gap:8px;margin-top:10px}
+.top button.go{flex:1;padding:14px;border-radius:24px;background:var(--tint2);color:#fff;font-size:16px;box-shadow:inset 0 1px 0 rgba(255,255,255,.45),0 4px 14px rgba(10,132,255,.4)}
+.top button.soft{padding:14px 16px;border-radius:24px;background:var(--field);border:1px solid var(--brd)}
+.opts{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;font-size:13px}
+.opts label{display:flex;align-items:center;gap:6px;padding:8px 13px;border-radius:18px;background:var(--field);border:1px solid var(--brd)}
+.opts input{accent-color:var(--tint);margin:0}
+.opts input[type=time]{border:0;background:transparent;color:var(--ink);font:inherit;padding:0}
+#info{margin-top:10px;font-size:14px;line-height:1.4;color:var(--ink2);padding:0 4px}
+#steps{max-height:150px;overflow:auto;margin:8px 0 0;padding-left:22px;font-size:13px}
+
+/* ---- lane arrows ---- */
+#lanes{display:none;gap:5px;margin:0 0 10px;justify-content:center}
+#lanes span{min-width:38px;text-align:center;padding:5px;border-radius:12px;background:var(--field);border:1px solid var(--brd);color:var(--ink2);font-size:20px;font-weight:700}
+#lanes span.v{background:var(--tint2);color:#fff;border-color:transparent}
+
+/* ---- map controls ---- */
+.mb{position:absolute;z-index:1003;right:10px;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:2px;padding:5px;border-radius:30px}
+.mb button{width:48px;height:48px;border-radius:50%;display:grid;place-items:center;font-size:20px;font-weight:800}
+.mb button.on{background:var(--tint2);color:#fff;box-shadow:inset 0 1px 0 rgba(255,255,255,.4)}
+#recenter{display:none;position:absolute;z-index:1003;left:10px;bottom:calc(176px + env(safe-area-inset-bottom,0px));width:52px;height:52px;border-radius:50%;padding:0;place-items:center}
+#recenter.show{display:grid}
+.report{position:absolute;z-index:1000;left:50%;transform:translateX(-50%);bottom:calc(24px + env(safe-area-inset-bottom,0px));display:flex;gap:2px;padding:6px;border-radius:32px}
+.report button{display:flex;flex-direction:column;align-items:center;gap:2px;min-width:64px;padding:7px 10px;border-radius:26px;font-size:11px}
+.report button i{font-style:normal;font-size:22px;line-height:1}
+.report button.on{background:var(--tint2);color:#fff}
+#hud{position:absolute;z-index:1000;left:10px;bottom:calc(98px + env(safe-area-inset-bottom,0px));display:none;gap:8px;align-items:center}
+.spd{position:relative;width:68px;height:68px;border-radius:50%;display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1}
+.spd b{font-size:26px;font-weight:800;display:block}.spd small{font-size:11px;color:var(--ink2)}
+.spd.over{background:rgba(255,59,48,.85);color:#fff}.spd.over small{color:#fff}
+.lim{width:48px;height:48px;border-radius:50%;border:5px solid #d32f2f;background:#fff;color:#111;font-weight:800;font-size:18px;display:flex;align-items:center;justify-content:center;box-shadow:var(--sh)}
+#startbtn{display:none;position:absolute;z-index:1000;left:50%;transform:translateX(-50%);bottom:calc(100px + env(safe-area-inset-bottom,0px));padding:15px 44px;border-radius:34px;background:rgba(31,164,99,.9);color:#fff;font-size:20px;border:1px solid rgba(255,255,255,.5);-webkit-backdrop-filter:blur(16px);backdrop-filter:blur(16px);box-shadow:inset 0 1px 0 rgba(255,255,255,.55),0 8px 24px rgba(31,164,99,.45)}
+#startbtn:active{transform:translateX(-50%) scale(.96)}
+#toast{display:none;position:absolute;z-index:1004;left:50%;bottom:calc(104px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);padding:10px 18px;border-radius:24px;font-size:14px;font-weight:600;max-width:86vw;text-align:center}
+#attr{position:absolute;z-index:999;left:8px;bottom:calc(3px + env(safe-area-inset-bottom,0px));font-size:10px;padding:2px 8px;border-radius:10px;color:var(--ink2);box-shadow:none}
+
+/* ---- driving screen ---- */
+#navtop{display:none;position:absolute;z-index:1002;top:calc(10px + env(safe-area-inset-top,0px));left:10px;right:10px;padding:14px 18px;border-radius:30px;color:#fff;background:rgba(0,72,80,.62);-webkit-backdrop-filter:blur(24px) saturate(180%);backdrop-filter:blur(24px) saturate(180%);border:1px solid rgba(255,255,255,.28);box-shadow:var(--sh),inset 0 1px 0 rgba(255,255,255,.35)}
 #nt-main{display:flex;align-items:center;gap:16px}
 #nt-arrow{font-size:54px;line-height:1;min-width:60px;text-align:center}
-#nt-dist{font-size:34px;font-weight:700;line-height:1.1}
+#nt-dist{font-size:34px;font-weight:800;line-height:1.1}
 #nt-text{font-size:19px;line-height:1.25}
-#nt-then{margin-top:10px;font-size:16px;border-top:1px solid rgba(255,255,255,.3);padding-top:8px}
+#nt-then{margin-top:10px;font-size:16px;border-top:1px solid rgba(255,255,255,.25);padding-top:8px}
 #nt-then-arrow{font-size:22px;margin-left:6px}
 #navtop #lanes{margin:10px 0 0}
-#navtop #lanes span{background:rgba(255,255,255,.2);color:#d6ecec}
-#navtop #lanes span.v{background:#fff;color:#005f63}
-#navbot{display:none;position:absolute;z-index:1002;left:0;right:0;bottom:0;background:#fff;padding:12px 16px calc(14px + env(safe-area-inset-bottom,0px));align-items:center;justify-content:space-between;box-shadow:0 -4px 16px rgba(0,0,0,.25);border-radius:22px 22px 0 0}
-#navbot button{width:52px;height:52px;border-radius:50%;padding:0;font-size:22px;background:#fff;color:var(--ink);border:2px solid var(--line)}
+#navtop #lanes span{background:rgba(255,255,255,.16);color:#d6ecec;border-color:rgba(255,255,255,.2)}
+#navtop #lanes span.v{background:#fff;color:#004850}
+#navbot{display:none;position:absolute;z-index:1002;left:10px;right:10px;bottom:calc(22px + env(safe-area-inset-bottom,0px));padding:16px 14px 12px;border-radius:36px;align-items:center;justify-content:space-between}
+#navbot::after{content:"";position:absolute;top:6px;left:50%;width:38px;height:5px;border-radius:3px;background:var(--ink2);opacity:.35;transform:translateX(-50%)}
+#navbot button{width:52px;height:52px;border-radius:50%;padding:0;display:grid;place-items:center;background:var(--field);border:1px solid var(--brd)}
 #nb-mid{text-align:center;cursor:pointer;flex:1}
-#navbot::before{content:"";position:absolute;top:6px;left:50%;width:40px;height:5px;border-radius:3px;background:#ccc;transform:translateX(-50%)}
-#nb-eta{font-size:32px;font-weight:700;color:#1b8a5a;line-height:1.1}
-#nb-sub{font-size:16px;color:#555}
-#startbtn{display:none;position:absolute;z-index:1000;left:50%;transform:translateX(-50%);bottom:calc(84px + env(safe-area-inset-bottom,0px));background:#1b8a5a;color:#fff;font-size:20px;padding:14px 40px;border-radius:30px;box-shadow:0 4px 14px rgba(0,0,0,.4)}
+#nb-eta{font-size:32px;font-weight:800;color:var(--ok);line-height:1.1}
+#nb-sub{font-size:15px;color:var(--ink2)}
 body.nav #navtop{display:block}
 body.nav #navbot{display:flex}
 body.nav .top{display:none}
 body.nav .report{display:none}
-body.nav.rep .report{display:flex;bottom:calc(210px + env(safe-area-inset-bottom,0px))}
+body.nav.rep .report{display:flex;bottom:calc(220px + env(safe-area-inset-bottom,0px))}
 body.nav #hud{bottom:calc(120px + env(safe-area-inset-bottom,0px))}
-body.nav #toast{bottom:130px}
+body.nav #recenter{bottom:calc(198px + env(safe-area-inset-bottom,0px))}
+body.nav #toast{bottom:calc(124px + env(safe-area-inset-bottom,0px))}
 body.nav #startbtn{display:none!important}
-#sheet{display:none;position:absolute;z-index:1001;left:0;right:0;bottom:calc(78px + env(safe-area-inset-bottom,0px));max-height:58vh;overflow:auto;background:#fff;border-radius:22px 22px 0 0;padding:14px 14px 18px;box-shadow:0 -4px 16px rgba(0,0,0,.3)}
+body.nav .mb{top:56%}
+
+/* ---- pull-up menu ---- */
+#sheet{display:none;position:absolute;z-index:1001;left:10px;right:10px;bottom:calc(98px + env(safe-area-inset-bottom,0px));max-height:56vh;overflow:auto;padding:14px;border-radius:32px;background:var(--glass2)}
+body.nav #sheet{bottom:calc(120px + env(safe-area-inset-bottom,0px))}
 #sheet.open{display:block}
 .chips{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
-.chips button{background:#f4ecd4;color:var(--ink);padding:8px 2px;font-size:12px;font-weight:600;display:flex;flex-direction:column;align-items:center;gap:2px;border-radius:12px}
-.chips button span{font-size:22px}
-#sq{margin-top:10px;width:100%;padding:11px;border:2px solid var(--line);border-radius:10px;font-size:16px}
-.pc{border:2px solid var(--line);border-radius:12px;padding:10px;margin-top:8px;font-size:14px}
-.pc b{display:block}.pc small{color:#555}
-.pb{display:flex;gap:8px;margin-top:8px}.pb button{flex:1;padding:8px}.pb button.alt{background:var(--accent)}
-.sec{font-weight:700;margin-top:12px}
+.chips button{display:flex;flex-direction:column;align-items:center;gap:3px;padding:10px 2px;border-radius:20px;background:var(--field);border:1px solid var(--brd);font-size:11.5px}
+.chips button span{font-size:24px;line-height:1}
+#sheet #sq{width:100%;margin-top:10px;padding:14px 16px;border-radius:22px;border:1px solid var(--brd);background:var(--field);font:inherit;font-size:16px;color:var(--ink);outline:none}
+#sheet #sq:focus{outline:2.5px solid var(--tint)}
+.pc{margin-top:8px;padding:12px 14px;border-radius:22px;background:var(--field);border:1px solid var(--brd);font-size:14px}
+.pc b{display:block;font-size:15px}.pc small{color:var(--ink2)}
+.pb{display:flex;gap:8px;margin-top:10px}
+.pb button{flex:1;padding:10px;border-radius:18px;background:var(--glass2);border:1px solid var(--brd)}
+.pb button.alt{background:var(--tint2);color:#fff;border-color:transparent}
+.sec{font-weight:700;margin-top:14px}
 .sheetbtns{display:flex;gap:8px;margin-top:12px}
-.sheetbtns button{flex:1;background:#fff;color:var(--ink);border:2px solid var(--line)}
-.mb{align-items:flex-end}
-.mb #follow{font-size:22px;font-weight:800}
-.mb #follow.on{background:var(--accent);color:#fff}
-#attr{position:absolute;z-index:999;left:6px;bottom:calc(2px + env(safe-area-inset-bottom,0px));font-size:10px;background:rgba(255,255,255,.8);padding:1px 5px;border-radius:4px}
-body.nav #attr{left:auto;right:6px;bottom:calc(84px + env(safe-area-inset-bottom,0px))}
+.sheetbtns button{flex:1;padding:13px;border-radius:20px;background:var(--field);border:1px solid var(--brd)}
+
+/* ---- map details ---- */
+.pin{font-size:26px;line-height:1;filter:drop-shadow(0 2px 3px rgba(0,0,0,.4))}
 body.hu #map{inset:auto;left:50%;top:50%;width:125vmax;height:125vmax;margin:-62.5vmax 0 0 -62.5vmax;transition:transform .5s linear}
 body.hu .leaflet-control-container{display:none}
 body.hu .pin{transform:rotate(var(--hdg,0deg))}
-#recenter{display:none;position:absolute;z-index:1003;left:10px;bottom:calc(152px + env(safe-area-inset-bottom,0px));width:52px;height:52px;border-radius:50%;padding:0;font-size:22px;background:var(--panel);color:var(--ink);box-shadow:0 3px 10px rgba(0,0,0,.35)}
-#recenter.show{display:block}
-body.nav #recenter{bottom:calc(196px + env(safe-area-inset-bottom,0px))}
-#hud{position:absolute;z-index:1000;left:10px;bottom:calc(76px + env(safe-area-inset-bottom,0px));display:none;gap:8px;align-items:center}
-.spd{background:#fff;color:#111;border-radius:50%;width:66px;height:66px;display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1;box-shadow:0 3px 10px rgba(0,0,0,.35)}
-.spd b{font-size:26px;display:block}.spd small{font-size:11px}.spd.over{background:#c62828;color:#fff}
-.lim{width:46px;height:46px;border-radius:50%;border:5px solid #d32f2f;background:#fff;color:#111;font-weight:800;font-size:18px;display:flex;align-items:center;justify-content:center}
-.top input:focus{outline:3px solid var(--accent);border-color:var(--accent)}
-.row{display:flex;gap:8px;margin-top:8px}
-button{font:inherit;font-weight:700;border:0;border-radius:10px;padding:10px 12px;cursor:pointer;background:var(--bg);color:#fff}
-button.go{background:var(--accent);flex:1}
-button:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
-#res{margin:6px 0 0;padding:0;list-style:none;max-height:240px;overflow:auto}
-#res li{padding:10px;border:2px solid var(--line);background:#fff;border-radius:10px;margin-bottom:6px;cursor:pointer;font-size:14px;line-height:1.35}
-#res li:hover,#res li:active{background:#f1e6c6;border-color:var(--accent)}
-#info{margin-top:8px;font-size:14px;line-height:1.4}
-#steps{max-height:150px;overflow:auto;margin:6px 0 0;padding-left:18px;font-size:13px}
-.report{position:absolute;z-index:1000;bottom:calc(14px + env(safe-area-inset-bottom,0px));left:10px;right:10px;display:flex;gap:8px;justify-content:center;flex-wrap:wrap}
-.report button{background:var(--panel);color:var(--ink);box-shadow:0 3px 10px rgba(0,0,0,.35)}
-.report button.on{background:var(--accent);color:#fff}
-.pin{font-size:24px;line-height:1;filter:drop-shadow(0 2px 2px rgba(0,0,0,.5))}
-#toast{position:absolute;z-index:1001;left:50%;bottom:80px;transform:translateX(-50%);background:var(--bg);color:#fff;padding:8px 14px;border-radius:20px;font-size:14px;display:none}
-@media (prefers-reduced-motion:no-preference){#toast{transition:opacity .2s}}
+.leaflet-bottom.leaflet-right{margin-bottom:100px}
+@media (pointer:coarse){.leaflet-control-zoom{display:none}}
+.leaflet-popup-content-wrapper{background:var(--glass2);-webkit-backdrop-filter:blur(20px) saturate(180%);backdrop-filter:blur(20px) saturate(180%);border:1px solid var(--brd);border-radius:20px;color:var(--ink);box-shadow:var(--sh)}
+.leaflet-popup-tip{background:var(--glass2)}
+.leaflet-popup-content button{background:var(--tint2);color:#fff;border-radius:14px;padding:8px 14px}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
 </style>
 </head>
 <body>
 <div id="map"></div>
-<div class="top">
+
+<div class="top glass">
   <div id="bar"><span id="barTxt">Search a destination</span><button id="tog" aria-label="Show or hide the search panel">Hide</button></div>
   <div id="lanes"></div>
   <div id="body">
-  <input id="from" placeholder="From (type a start, or tap the map)" aria-label="Start" autocomplete="off">
-  <input id="q" placeholder="Where to? (e.g. KLCC, Penang airport)" aria-label="Destination" autocomplete="off">
-  <ul id="res"></ul>
-  <div class="row"><button class="go" id="go">Get route</button><button id="loc">My location</button><button id="mute" aria-label="Turn voice on or off">&#128266;</button></div>
-  <div class="opts"><label><input type="checkbox" id="notoll"> Avoid tolls</label><label><input type="checkbox" id="nohwy"> Avoid highways</label></div>
-  <div class="opts"><label>Arrive by <input type="time" id="arr"></label></div>
-  <div id="info">Search a destination, or tap the map to set one.</div>
-  <ol id="steps"></ol>
+    <label class="field"><span class="dot from"></span><input id="from" placeholder="Start (type one, or use My location)" aria-label="Start" autocomplete="off"></label>
+    <label class="field"><span class="dot to"></span><input id="q" placeholder="Where to?" aria-label="Destination" autocomplete="off"></label>
+    <ul id="res"></ul>
+    <div class="row"><button class="go" id="go">Get route</button><button class="soft" id="loc">My location</button><button class="soft" id="mute" aria-label="Turn voice on or off">&#128266;</button></div>
+    <div class="opts"><label><input type="checkbox" id="notoll"> Avoid tolls</label><label><input type="checkbox" id="nohwy"> Avoid highways</label><label>Arrive by <input type="time" id="arr"></label></div>
+    <div id="info">Search a destination, or tap the map.</div>
+    <ol id="steps"></ol>
   </div>
 </div>
-<div class="report" id="rep">
-  <button data-t="police">&#128110; Police</button>
-  <button data-t="crash">&#128165; Crash</button>
-  <button data-t="hazard">&#9888;&#65039; Hazard</button>
-  <button data-t="jam">&#128678; Jam</button>
+
+<div class="report glass" id="rep">
+  <button data-t="police"><i>&#128110;</i>Police</button>
+  <button data-t="crash"><i>&#128165;</i>Crash</button>
+  <button data-t="hazard"><i>&#9888;&#65039;</i>Hazard</button>
+  <button data-t="jam"><i>&#128678;</i>Jam</button>
 </div>
+
+<div class="mb glass">
+  <button id="follow" class="on" aria-label="Map orientation: tap to switch between North Up and Moving Direction">N</button>
+  <button id="whole" aria-label="Show whole route"><svg class="i" viewBox="0 0 24 24"><circle cx="6" cy="18" r="2"/><circle cx="18" cy="6" r="2"/><path d="M6 16V9a3 3 0 0 1 3-3h7"/></svg></button>
+  <button id="more" aria-label="Quick search, stops and new drive"><svg class="i" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+</div>
+
+<button id="recenter" class="glass" aria-label="Centre on my location"><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg></button>
+<div id="attr">&copy; OpenStreetMap contributors</div>
+<div id="hud"></div>
+
 <div id="sheet">
   <div class="chips" id="chips"></div>
   <input id="sq" placeholder="Find a place or address" aria-label="Find a place or address" autocomplete="off">
@@ -127,24 +173,20 @@ button:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
   <div class="sheetbtns"><button id="newdrive">New drive</button><button id="clearstops">Clear stops</button></div>
   <div class="sheetbtns"><button id="mute3">&#128266; Voice on</button></div>
 </div>
+
 <button id="startbtn">Start</button>
+
 <div id="navtop">
   <div id="nt-main"><span id="nt-arrow">&#8593;</span><div><div id="nt-dist">--</div><div id="nt-text"></div></div></div>
   <div id="nt-then">Then <span id="nt-then-arrow"></span></div>
 </div>
 <div id="navbot">
-  <button id="endnav" aria-label="End navigation">&#10005;</button>
+  <button id="endnav" aria-label="End navigation"><svg class="i" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
   <div id="nb-mid"><div id="nb-eta">-- min</div><div id="nb-sub"></div></div>
-  <button id="nb-rep" aria-label="Report on the road">&#9888;&#65039;</button>
-</div>
-<button id="recenter" aria-label="Centre on my location">&#9678;</button>
-<div id="attr">&copy; OpenStreetMap contributors</div>
-<div id="hud"></div>
-<div class="mb">
-  <button id="follow" class="on" aria-label="Map orientation: tap to switch between North Up and Moving Direction">N</button>
-  <button id="whole" aria-label="Show whole route">&#128506;</button><button id="more" aria-label="Quick search, stops and new drive">&#9776;</button>
+  <button id="nb-rep" aria-label="Report on the road"><svg class="i" viewBox="0 0 24 24"><path d="M12 4L3 20h18z"/><path d="M12 10v4M12 17.2v.1"/></svg></button>
 </div>
 <div id="toast"></div>
+
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script>
 const ICON={police:"\u{1F46E}",crash:"\u{1F4A5}",hazard:"\u26A0\uFE0F",jam:"\u{1F6A6}"};
